@@ -1,0 +1,6 @@
+{
+  "name": "Form Laporan Teknisi",
+  "description": "Aplikasi pengisian form laporan teknisi (Kenjeran Rekap) dengan validasi duplikat, ekspor data, salin format pesan Telegram, integrasi GPS, dan upload foto evidence Telegram.",
+  "requestFramePermissions": ["geolocation", "camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
