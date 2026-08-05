@@ -195,15 +195,57 @@ export const MOCK_REPORT_SCREENSHOT = {
   materialNote: '-',
 };
 
-// Generates unique test report data when mock values already exist in history
-export function generateUniqueMockData(history: TechnicianReport[]) {
+// Normalize values for duplicate checking (strips quotes, =, decimal .0, whitespace, lowercase)
+export function normalizeCheckValue(val?: string | number): string {
+  if (val === undefined || val === null) return '';
+  let str = String(val).trim();
+  // Remove Excel/Sheets formula wrappers like ="12345" or =12345 or '12345 or "12345"
+  str = str.replace(/^=['"]?/, '').replace(/['"]$/, '');
+  // If ends with .0, remove decimal .0
+  if (str.endsWith('.0')) {
+    str = str.slice(0, -2);
+  }
+  return str.trim().toLowerCase();
+}
+
+// Checks if a value is a valid non-empty, non-placeholder SC/SN/Internet string
+export function isValidCheckValue(val?: string | number): boolean {
+  const cleaned = normalizeCheckValue(val);
+  if (!cleaned) return false;
+  const invalidKeywords = [
+    '-',
+    '--',
+    'no internet',
+    'no. internet',
+    'no_internet',
+    'nomor internet',
+    'sn ont',
+    'sn_ont',
+    'sn',
+    'serial number',
+    'undefined',
+    'null',
+    '0'
+  ];
+  return !invalidKeywords.includes(cleaned);
+}
+
+// Generates unique test report data guaranteed not to exist in history/sheets
+export function generateUniqueMockData(existingReports: TechnicianReport[]) {
   let randomNoInternet = `152407${Math.floor(100000 + Math.random() * 900000)}`;
   let randomSnOnt = `48575443${Math.random().toString(36).substring(2, 6).toUpperCase()}${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
 
-  while (history.some(h => String(h.noInternet || '').trim() === randomNoInternet)) {
+  const normalizedExistingInternet = new Set(
+    existingReports.map(r => normalizeCheckValue(r.noInternet)).filter(Boolean)
+  );
+  const normalizedExistingSn = new Set(
+    existingReports.map(r => normalizeCheckValue(r.snOnt)).filter(Boolean)
+  );
+
+  while (normalizedExistingInternet.has(normalizeCheckValue(randomNoInternet))) {
     randomNoInternet = `152407${Math.floor(100000 + Math.random() * 900000)}`;
   }
-  while (history.some(h => String(h.snOnt || '').trim() === randomSnOnt)) {
+  while (normalizedExistingSn.has(normalizeCheckValue(randomSnOnt))) {
     randomSnOnt = `48575443${Math.random().toString(36).substring(2, 6).toUpperCase()}${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
   }
 

@@ -58,6 +58,11 @@ export const FormInput: React.FC<FormInputProps> = ({
             onChange={(e) => onChange(e.target.value)}
             className={`${baseInputStyles} appearance-none cursor-pointer pr-10`}
           >
+            {(!value || !options.includes(value)) && (
+              <option value="" disabled hidden>
+                -- Pilih {label} --
+              </option>
+            )}
             {options.map((option) => (
               <option key={option} value={option} className="bg-white text-slate-800">
                 {option}

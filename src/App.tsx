@@ -10,7 +10,8 @@ import { ReportSummary } from './components/ReportSummary';
 import { appendReportToAppsScript, fetchReportsFromAppsScript } from './services/googleSheets';
 import { sendReportToTelegram } from './services/telegramService';
 import { EvidenceUploader } from './components/EvidenceUploader';
-import { FORM_OPTIONS, MOCK_REPORT_SCREENSHOT, formatDateTime, generateUniqueMockData } from './utils';
+import { SaveLoadingCard, SaveStep } from './components/SaveLoadingCard';
+import { FORM_OPTIONS, MOCK_REPORT_SCREENSHOT, formatDateTime, generateUniqueMockData, isValidCheckValue, normalizeCheckValue } from './utils';
 import { 
   ClipboardCheck, 
   MapPin, 
@@ -45,6 +46,11 @@ export default function App() {
   const [sheetReports, setSheetReports] = useState<TechnicianReport[]>([]);
   const [isSavingToSheets, setIsSavingToSheets] = useState(false);
   const [sheetsSyncStatus, setSheetsSyncStatus] = useState<string | null>(null);
+
+  // Loading card states for saving report
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveStep, setSaveStep] = useState<SaveStep>('validating');
+  const [saveStepMessage, setSaveStepMessage] = useState<string>('');
 
   // Auto fetch spreadsheet data when Web App URL is connected
   useEffect(() => {
@@ -89,23 +95,16 @@ export default function App() {
     localStorage.setItem('kenjeran_rekap_history', JSON.stringify(newHistory));
   };
 
-  // Helper to validate whether a string value is a real ID/SN to check for duplicates
-  const isValidCheckValue = (val?: string) => {
-    if (!val) return false;
-    const cleaned = String(val).trim().toLowerCase();
-    return cleaned !== '' && cleaned !== '-' && cleaned !== 'no internet' && cleaned !== 'no. internet' && cleaned !== 'sn ont' && cleaned !== 'sn';
-  };
-
   // Real-time duplicate checking against Google Sheets database and local history
   const allKnownReports = [...sheetReports, ...history];
   const isDuplicateInternet = Boolean(
     isValidCheckValue(reportState.noInternet) &&
-    allKnownReports.some(s => isValidCheckValue(s.noInternet) && String(s.noInternet).trim().toLowerCase() === String(reportState.noInternet).trim().toLowerCase())
+    allKnownReports.some(s => isValidCheckValue(s.noInternet) && normalizeCheckValue(s.noInternet) === normalizeCheckValue(reportState.noInternet))
   );
   
   const isDuplicateSn = Boolean(
     isValidCheckValue(reportState.snOnt) &&
-    allKnownReports.some(s => isValidCheckValue(s.snOnt) && String(s.snOnt).trim().toLowerCase() === String(reportState.snOnt).trim().toLowerCase())
+    allKnownReports.some(s => isValidCheckValue(s.snOnt) && normalizeCheckValue(s.snOnt) === normalizeCheckValue(reportState.snOnt))
   );
 
   const handleFieldChange = (field: keyof typeof reportState, value: string | string[]) => {
@@ -126,9 +125,9 @@ export default function App() {
 
   // Populate sample values matching the exact screenshot or fresh unique data if duplicates exist
   const handleLoadMockData = () => {
-    const checkList = sheetReports.length > 0 ? sheetReports : [];
-    const isMockInternetDuplicate = checkList.some(h => h.noInternet && String(h.noInternet).trim() === MOCK_REPORT_SCREENSHOT.noInternet.trim());
-    const isMockSnDuplicate = checkList.some(h => h.snOnt && String(h.snOnt).trim() === MOCK_REPORT_SCREENSHOT.snOnt.trim());
+    const checkList = [...sheetReports, ...history];
+    const isMockInternetDuplicate = checkList.some(h => isValidCheckValue(h.noInternet) && normalizeCheckValue(h.noInternet) === normalizeCheckValue(MOCK_REPORT_SCREENSHOT.noInternet));
+    const isMockSnDuplicate = checkList.some(h => isValidCheckValue(h.snOnt) && normalizeCheckValue(h.snOnt) === normalizeCheckValue(MOCK_REPORT_SCREENSHOT.snOnt));
 
     if (isMockInternetDuplicate || isMockSnDuplicate) {
       setReportState(generateUniqueMockData(checkList));
@@ -141,7 +140,7 @@ export default function App() {
 
   // Randomize duplicate values (No Internet, SN ONT, SC) for spreadsheet testing
   const handleRandomizeDuplicates = () => {
-    const checkList = sheetReports.length > 0 ? sheetReports : history;
+    const checkList = [...sheetReports, ...history];
     const freshData = generateUniqueMockData(checkList);
     setReportState(prev => ({
       ...prev,
@@ -207,32 +206,26 @@ export default function App() {
       return;
     }
 
-    // Fetch latest Google Sheets data if connected to ensure fresh duplicate check
-    let currentSheetReports = sheetReports;
-    if (webAppUrl) {
-      setIsSavingToSheets(true);
-      try {
-        currentSheetReports = await fetchReportsFromAppsScript(webAppUrl);
-        setSheetReports(currentSheetReports);
-      } catch (err) {
-        console.warn('Gagal memuat data terbaru dari Apps Script Web App saat cek duplikasi:', err);
-      }
-    }
+    // Open loading card modal
+    setIsSaving(true);
+    setSaveStep('validating');
+    setSaveStepMessage('Memeriksa duplikasi data...');
 
-    // Strict Duplicate Checking before inputting to Google Sheets
-    const allExisting = [...currentSheetReports, ...history];
-    const targetNoInternet = String(reportState.noInternet || '').trim().toLowerCase();
-    const targetSnOnt = String(reportState.snOnt || '').trim().toLowerCase();
+    // Strict Duplicate Checking using local sheet state + local history (instant)
+    const allExisting = [...sheetReports, ...history];
+    const targetNoInternet = normalizeCheckValue(reportState.noInternet);
+    const targetSnOnt = normalizeCheckValue(reportState.snOnt);
 
-    const dupInternet = isValidCheckValue(targetNoInternet) 
-      ? allExisting.find(item => isValidCheckValue(item.noInternet) && String(item.noInternet).trim().toLowerCase() === targetNoInternet) 
+    const dupInternet = isValidCheckValue(reportState.noInternet) 
+      ? allExisting.find(item => isValidCheckValue(item.noInternet) && normalizeCheckValue(item.noInternet) === targetNoInternet) 
       : undefined;
-    const dupSn = isValidCheckValue(targetSnOnt) 
-      ? allExisting.find(item => isValidCheckValue(item.snOnt) && String(item.snOnt).trim().toLowerCase() === targetSnOnt) 
+    const dupSn = isValidCheckValue(reportState.snOnt) 
+      ? allExisting.find(item => isValidCheckValue(item.snOnt) && normalizeCheckValue(item.snOnt) === targetSnOnt) 
       : undefined;
 
     if (dupInternet || dupSn) {
       setIsSavingToSheets(false);
+      setIsSaving(false);
       const dupErrors: { [key: string]: string } = {};
       const msgParts: string[] = [];
       
@@ -275,57 +268,67 @@ export default function App() {
       setActiveSection(0);
     };
 
+    let tgMessage = '';
+
     // 1. Sync to Google Sheets via Web App URL (No Login Required)
     if (webAppUrl) {
+      setSaveStep('sheets');
+      setSaveStepMessage('Menyimpan ke Google Sheets & Telegram bersamaan...');
+      setIsSavingToSheets(true);
+
       try {
-        await appendReportToAppsScript(webAppUrl, newReport);
+        // Run Sheets append & Telegram send in parallel for maximum speed
+        const [_, tgRes] = await Promise.all([
+          appendReportToAppsScript(webAppUrl, newReport),
+          sendReportToTelegram(newReport).catch(err => ({ success: false, error: err.message || 'Error Telegram' }))
+        ]);
+
         setSheetReports(prev => [newReport, ...prev]);
-        
         const newHistory = [newReport, ...history];
         updateHistory(newHistory);
-
         resetFormForNextReport();
 
-        // Auto send to Telegram Topic/Group
-        let tgMessage = '';
-        const tgRes = await sendReportToTelegram(newReport);
         if (tgRes.success) {
           tgMessage = ' & terkirim ke Telegram!';
         } else if (tgRes.error) {
           tgMessage = ` (⚠️ Telegram: ${tgRes.error})`;
         }
 
-        setSheetsSyncStatus(`✅ Laporan berhasil tersimpan ke Google Sheets${tgMessage}! Form telah disiapkan untuk input berikutnya.`);
-        setTimeout(() => setSheetsSyncStatus(null), 5000);
+        setSheetsSyncStatus(`✅ Laporan berhasil tersimpan ke Google Sheets${tgMessage}! Form disiapkan untuk input berikutnya.`);
       } catch (err: any) {
         console.error('Error saving to Google Sheets Web App:', err);
         setSheetsSyncStatus(`Gagal kirim ke Google Web App: ${err.message || 'Error'}`);
-        setTimeout(() => setSheetsSyncStatus(null), 6000);
       } finally {
         setIsSavingToSheets(false);
       }
     } 
     // 2. Fallback Local Storage Only
     else {
+      setSaveStep('sheets');
+      setSaveStepMessage('Menyimpan ke histori & Telegram...');
+      
       const newHistory = [newReport, ...history];
       updateHistory(newHistory);
-
       resetFormForNextReport();
 
-      // Auto send to Telegram Topic/Group
-      let tgMessage = '';
-      const tgRes = await sendReportToTelegram(newReport);
+      const tgRes = await sendReportToTelegram(newReport).catch(err => ({ success: false, error: err.message }));
       if (tgRes.success) {
         tgMessage = ' & terkirim ke Telegram!';
       } else if (tgRes.error) {
         tgMessage = ` (⚠️ Telegram: ${tgRes.error})`;
       }
 
-      setSheetsSyncStatus(`✅ Laporan tersimpan di histori lokal${tgMessage}! Form telah disiapkan untuk input berikutnya.`);
-      setTimeout(() => setSheetsSyncStatus(null), 5000);
+      setSheetsSyncStatus(`✅ Laporan tersimpan di histori lokal${tgMessage}! Form disiapkan untuk input berikutnya.`);
     }
 
+    // Step Success finish
+    setSaveStep('success');
+    setSaveStepMessage(`Laporan berhasil tersimpan${tgMessage}!`);
 
+    // Brief smooth finish delay
+    await new Promise(r => setTimeout(r, 500));
+    setIsSaving(false);
+    setTimeout(() => setSheetsSyncStatus(null), 5000);
   };
 
   const handleDeleteReport = (id: string) => {
@@ -595,10 +598,10 @@ export default function App() {
       )
     },
     {
-      title: '7. Material Dropcore',
+      title: '7. Material',
       icon: <Flame className="w-4 h-4 text-indigo-600" />,
       fields: (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-200/60">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-200/60">
           <FormInput
             id="jenisDropcore"
             label="Jenis Kabel Dropcore"
@@ -629,14 +632,6 @@ export default function App() {
             onChange={(val) => handleFieldChange('clampRing', val)}
             placeholder="Masukkan jumlah atau tanda -"
           />
-        </div>
-      )
-    },
-    {
-      title: '8. Aksesoris Tambahan & Catatan',
-      icon: <Info className="w-4 h-4 text-indigo-600" />,
-      fields: (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-200/60">
           <FormInput
             id="clampHook"
             label="Clamp Hook"
@@ -672,19 +667,21 @@ export default function App() {
             onChange={(val) => handleFieldChange('patchcore', val)}
             placeholder="Masukkan jumlah atau tanda -"
           />
-          <FormInput
-            id="materialNote"
-            label="Material Tambahan / Catatan"
-            type="textarea"
-            value={reportState.materialNote}
-            onChange={(val) => handleFieldChange('materialNote', val)}
-            placeholder="Catat material tambahan atau catatan khusus lainnya disini..."
-          />
+          <div className="md:col-span-3">
+            <FormInput
+              id="materialNote"
+              label="Catatan / Material Tambahan"
+              type="textarea"
+              value={reportState.materialNote}
+              onChange={(val) => handleFieldChange('materialNote', val)}
+              placeholder="Catat material tambahan atau catatan khusus lainnya disini..."
+            />
+          </div>
         </div>
       )
     },
     {
-      title: '9. Foto Evidence Lapangan (Auto Send Telegram)',
+      title: '8. Foto Evidence Lapangan (Auto Send Telegram)',
       icon: <Camera className="w-4 h-4 text-sky-600" />,
       fields: (
         <EvidenceUploader
@@ -769,7 +766,7 @@ export default function App() {
                 <div className="flex items-center gap-2 text-xs font-mono">
                   <span className="text-slate-500">Progress:</span>
                   <span className="text-indigo-700 font-bold bg-indigo-50 border border-indigo-100 px-2.5 py-0.5 rounded-md">
-                    {Math.round((Object.values(reportState).filter(v => v && v !== '-').length / 32) * 100)}%
+                    {Math.min(100, Math.round((Object.values(reportState).filter(v => Array.isArray(v) ? v.length > 0 : Boolean(v && String(v).trim() !== '' && String(v).trim() !== '-')).length / 32) * 100))}%
                   </span>
                 </div>
               </div>
@@ -854,9 +851,11 @@ export default function App() {
                   <button
                     type="button"
                     onClick={handleSaveReport}
-                    className="px-5 py-2 text-xs font-extrabold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-md shadow-indigo-100 transition-all transform active:scale-95 cursor-pointer"
+                    disabled={isSaving}
+                    className="px-5 py-2 text-xs font-extrabold bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white rounded-xl shadow-md shadow-indigo-100 transition-all transform active:scale-95 cursor-pointer disabled:cursor-not-allowed flex items-center gap-2"
                   >
-                    Simpan Laporan
+                    {isSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                    <span>{isSaving ? 'Menyimpan...' : 'Simpan Laporan'}</span>
                   </button>
                 </div>
               </div>
@@ -885,6 +884,13 @@ export default function App() {
         <p>© 2026 Kenjeran Rekap • Form Laporan Lapangan Teknisi</p>
         <p className="text-[10px] mt-1 text-slate-400">Simulasi Google Sheets diaktifkan secara lokal. Data tersimpan secara aman dalam memori lokal browser Anda.</p>
       </footer>
+
+      {/* Loading Card Modal when saving report */}
+      <SaveLoadingCard
+        isOpen={isSaving}
+        step={saveStep}
+        message={saveStepMessage}
+      />
     </div>
   );
 }
