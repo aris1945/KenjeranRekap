@@ -445,6 +445,7 @@ export default function App() {
             value={reportState.nomrSc}
             onChange={(val) => handleFieldChange('nomrSc', val)}
             placeholder="Ketik NOMR SC, contoh: AOs326071210..."
+            required
             hint="Nomor register SC dari sistem"
           />
           <FormInput
@@ -707,7 +708,7 @@ export default function App() {
                 KENJERAN REKAP
               </h1>
               <p className="text-[10px] text-slate-400 font-mono tracking-wider">
-                PANEL INPUT LAPORAN TEKNISI • LOKAL AKTIF
+                PANEL INPUT LAPORAN TEKNISI
               </p>
             </div>
           </div>
@@ -882,7 +883,6 @@ export default function App() {
       {/* Footer information section */}
       <footer className="bg-slate-50 border-t border-slate-200 py-6 text-center text-xs text-slate-500 font-sans">
         <p>© 2026 Kenjeran Rekap • Form Laporan Lapangan Teknisi</p>
-        <p className="text-[10px] mt-1 text-slate-400">Simulasi Google Sheets diaktifkan secara lokal. Data tersimpan secara aman dalam memori lokal browser Anda.</p>
       </footer>
 
       {/* Loading Card Modal when saving report */}
