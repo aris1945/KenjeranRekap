@@ -11,6 +11,8 @@ import { appendReportToAppsScript, fetchReportsFromAppsScript } from './services
 import { sendReportToTelegram } from './services/telegramService';
 import { EvidenceUploader } from './components/EvidenceUploader';
 import { SaveLoadingCard, SaveStep } from './components/SaveLoadingCard';
+import { PWAInstallButton } from './components/PWAInstallButton';
+import { OfflineIndicator } from './components/OfflineIndicator';
 import { FORM_OPTIONS, MOCK_REPORT_SCREENSHOT, formatDateTime, generateUniqueMockData, isValidCheckValue, normalizeCheckValue } from './utils';
 import { 
   ClipboardCheck, 
@@ -718,6 +720,7 @@ export default function App() {
               <span className="text-[10px] text-slate-400 uppercase font-bold tracking-widest font-mono">Real-time Clock</span>
               <p className="text-xs font-mono text-slate-600 font-bold">{currentTime}</p>
             </div>
+            <PWAInstallButton />
             <button
               onClick={handleLoadMockData}
               id="nav-btn-mock"
@@ -891,6 +894,9 @@ export default function App() {
         step={saveStep}
         message={saveStepMessage}
       />
+
+      {/* Offline Status Indicator */}
+      <OfflineIndicator />
     </div>
   );
 }
