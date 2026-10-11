@@ -13,6 +13,7 @@ import { EvidenceUploader } from './components/EvidenceUploader';
 import { SaveLoadingCard, SaveStep } from './components/SaveLoadingCard';
 import { PWAInstallButton } from './components/PWAInstallButton';
 import { OfflineIndicator } from './components/OfflineIndicator';
+import { DashboardCharts } from './components/DashboardCharts';
 import { FORM_OPTIONS, MOCK_REPORT_SCREENSHOT, formatDateTime, generateUniqueMockData, isValidCheckValue, normalizeCheckValue } from './utils';
 import { 
   ClipboardCheck, 
@@ -32,7 +33,9 @@ import {
   CheckCircle2,
   Loader2,
   Send,
-  Camera
+  Camera,
+  BarChart3,
+  FileText
 } from 'lucide-react';
 
 export default function App() {
@@ -42,6 +45,7 @@ export default function App() {
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [gpsLoading, setGpsLoading] = useState(false);
   const [currentTime, setCurrentTime] = useState<string>('');
+  const [mainView, setMainView] = useState<'form' | 'analytics'>('form');
 
   // Google Sheets static Web App URL from environment variable (.env)
   const webAppUrl = import.meta.env.VITE_GOOGLE_WEB_APP_URL || '';
@@ -95,6 +99,12 @@ export default function App() {
   const updateHistory = (newHistory: TechnicianReport[]) => {
     setHistory(newHistory);
     localStorage.setItem('kenjeran_rekap_history', JSON.stringify(newHistory));
+  };
+
+  // Load sample demo reports into history for testing visual analytics
+  const handleLoadSampleAnalytics = (sampleReports: TechnicianReport[]) => {
+    updateHistory(sampleReports);
+    setSheetsSyncStatus(`✅ Berhasil memuat ${sampleReports.length} data simulasi ke grafik analitik!`);
   };
 
   // Real-time duplicate checking against Google Sheets database and local history
@@ -753,8 +763,53 @@ export default function App() {
           </div>
         )}
 
-        {/* Upper Grid Layout: Left Edit Form / Right Live Preview */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6" id="upper-layout-grid">
+        {/* Navigation Tabs: Form Input vs Analytics Visualisasi */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-2 sm:p-2.5 rounded-2xl border border-slate-200/80 shadow-xs">
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setMainView('form')}
+              className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                mainView === 'form'
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-100'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              }`}
+            >
+              <FileText className="w-4 h-4" />
+              <span>Formulir Laporan</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setMainView('analytics')}
+              className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                mainView === 'analytics'
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-100'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              }`}
+            >
+              <BarChart3 className="w-4 h-4" />
+              <span>Visualisasi & Analitik</span>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                mainView === 'analytics'
+                  ? 'bg-white/20 text-white'
+                  : 'bg-indigo-50 text-indigo-700'
+              }`}>
+                {allKnownReports.length}
+              </span>
+            </button>
+          </div>
+
+          <div className="text-[11px] text-slate-500 font-medium px-2 hidden md:block">
+            {mainView === 'form' 
+              ? 'Input dan validasi laporan lapangan teknisi' 
+              : `Visualisasi Recharts: ${allKnownReports.length} data laporan terdeteksi`}
+          </div>
+        </div>
+
+        {mainView === 'form' ? (
+          /* Upper Grid Layout: Left Edit Form / Right Live Preview */
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6" id="upper-layout-grid">
           
           {/* Form Panel (7 Columns) */}
           <div className="lg:col-span-7 flex flex-col gap-4" id="form-editing-panel">
@@ -880,6 +935,12 @@ export default function App() {
           </div>
 
         </div>
+        ) : (
+          <DashboardCharts
+            reports={allKnownReports}
+            onLoadSampleData={handleLoadSampleAnalytics}
+          />
+        )}
 
       </main>
 
